@@ -4,6 +4,10 @@ A dedicated tab-bar workspace for [agent-shell](https://github.com/xenodium/agen
 
 Toggle into an "Agents" tab with a compact sidebar, buffer isolation, and tiling — then toggle back to your regular work. Non-agent buffers never pollute the workspace.
 
+![Sidebar with status icons](screenshot-sidebar.png)
+
+![Tiled view with multiple agents](screenshot-tiled.png)
+
 ## Features
 
 - **Dedicated tab-bar tab** — one keypress to switch between coding and agent monitoring
