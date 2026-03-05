@@ -318,7 +318,10 @@ Displays a compact list of agent-shell buffers with status icons.
 
 (defun agent-shell-workspace-sidebar--render ()
   "Render the sidebar contents."
-  (let* ((buffers (seq-filter #'buffer-live-p (agent-shell-buffers)))
+  (let* ((buffers (sort (copy-sequence (seq-filter #'buffer-live-p (agent-shell-buffers)))
+                        (lambda (a b)
+                          (string< (agent-shell-workspace--short-name a)
+                                   (agent-shell-workspace--short-name b)))))
          (selected agent-shell-workspace-sidebar--selected-buffer)
          (tiled agent-shell-workspace--tiled-buffers)
          (inhibit-read-only t)
