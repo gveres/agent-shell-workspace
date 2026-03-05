@@ -752,6 +752,7 @@ Otherwise, create a new Agents tab with the standard layout."
     (setq agent-shell-workspace--previous-tab
           (alist-get 'name (tab-bar--current-tab)))
     (tab-bar-switch-to-tab agent-shell-workspace--tab-name)
+    (agent-shell-workspace-sidebar-open)
     (agent-shell-workspace--activate-isolation))
 
    ;; No Agents tab -- create one
