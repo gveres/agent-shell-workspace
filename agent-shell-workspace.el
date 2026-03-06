@@ -314,7 +314,59 @@ Displays a compact list of agent-shell buffers with status icons.
                 (setq agent-shell-workspace-sidebar--refresh-timer nil)))
             nil t))
 
-;;;; Rendering
+;;;; Rendering helpers - leveraging agent-shell patterns
+
+(defun agent-shell-workspace--extract-color (color-or-face)
+  "Extract color string from COLOR-OR-FACE (string, face, or nil).
+Helper to avoid duplicating color extraction logic."
+  (cond
+   ((stringp color-or-face) color-or-face)
+   ((facep color-or-face) (face-foreground color-or-face nil t))
+   (t (face-foreground 'default nil t))))
+
+(defun agent-shell-workspace--blend-color (fg-color bg-color &optional fg-weight)
+  "Blend FG-COLOR with BG-COLOR using FG-WEIGHT ratio (default 30%).
+Matches the blending algorithm from agent-shell--background-tint-status-kind-label.
+FG-WEIGHT should be 0-10, where 3 means 30% foreground, 70% background."
+  (let ((fg-weight (or fg-weight 3))
+        (bg-weight (- 10 (or fg-weight 3))))
+    (when (and fg-color bg-color)
+      (apply #'format "#%02x%02x%02x"
+             (seq-mapn (lambda (f b)
+                         ;; color-values returns 16-bit (0-65535), must convert to 8-bit (0-255)
+                         (/ (+ (* (/ f 256) fg-weight)
+                               (* (/ b 256) bg-weight))
+                            10))
+                       (color-values fg-color)
+                       (color-values bg-color))))))
+
+(defun agent-shell-workspace--make-logo-box (logo color-or-face)
+  "Create a bordered box with LOGO in tinted background using COLOR-OR-FACE.
+Follows agent-shell's visual patterns for status boxes."
+  (let ((fg (agent-shell-workspace--extract-color color-or-face))
+        (bg-base (face-background 'default nil t)))
+    (let ((bg (agent-shell-workspace--blend-color fg bg-base 3)))
+      (propertize (format " %s " logo)
+                  'face `(:background ,bg
+                          :foreground ,fg
+                          :weight bold
+                          :box (:line-width 1 :color ,fg))))))
+
+(defun agent-shell-workspace--make-name-box (name color-or-face width)
+  "Create a bordered box with NAME using COLOR-OR-FACE, padded to WIDTH.
+If NAME is longer than WIDTH, it will be truncated with ellipsis."
+  (let ((fg (agent-shell-workspace--extract-color color-or-face))
+        ;; Handle long names: truncate to fit width with ellipsis
+        (display-name (if width
+                          (let ((truncated (if (> (length name) width)
+                                               (concat (substring name 0 (- width 1)) "…")
+                                             name)))
+                            ;; Pad after truncation to ensure alignment
+                            (format (format "%%-%ds" width) truncated))
+                        name)))
+    (propertize (format " %s " display-name)
+                'face `(:foreground ,fg
+                        :box (:line-width 1 :color ,fg)))))
 
 (defun agent-shell-workspace-sidebar--render ()
   "Render the sidebar contents."
@@ -325,7 +377,13 @@ Displays a compact list of agent-shell buffers with status icons.
          (selected agent-shell-workspace-sidebar--selected-buffer)
          (tiled agent-shell-workspace--tiled-buffers)
          (inhibit-read-only t)
-         (target-line nil))
+         (target-line nil)
+         ;; Calculate max name width for alignment
+         (max-name-width (when buffers
+                          (apply #'max
+                                 (mapcar (lambda (buf)
+                                          (length (agent-shell-workspace--short-name buf)))
+                                        buffers)))))
     (erase-buffer)
     (if (null buffers)
         (insert (propertize " No agent buffers" 'face 'font-lock-comment-face))
@@ -334,25 +392,29 @@ Displays a compact list of agent-shell buffers with status icons.
           (let* ((agent-icon (agent-shell-workspace--agent-icon buf))
                  (status (agent-shell-workspace--track-status
                           buf (agent-shell-workspace--buffer-status buf)))
-                 (icon (agent-shell-workspace--status-icon status))
                  (status-face (agent-shell-workspace--status-face status))
                  (short-name (agent-shell-workspace--short-name buf))
-                 (icon-propertized (propertize icon 'face status-face))
-                 (tile-indicator (if (memq buf tiled) "▫" " "))
-                 (line (concat " " agent-icon " " icon-propertized " " short-name " " tile-indicator)))
-            ;; Apply attention faces to entire line for visibility
-            (when (string= status "waiting")
-              (setq line (propertize line 'face 'agent-shell-workspace-waiting)))
-            (when (string= status "finished")
-              (setq line (propertize line 'face 'agent-shell-workspace-finished)))
-            ;; Apply selected face if this is the selected buffer
+                 (tile-indicator (if (memq buf tiled) " ▫" ""))
+                 ;; Build the line with bordered boxes
+                 ;; Use cyan for finished status, otherwise use status-face
+                 (display-face (if (string= status "finished") "cyan" status-face))
+                 (logo-box (agent-shell-workspace--make-logo-box agent-icon display-face))
+                 (name-box (agent-shell-workspace--make-name-box short-name display-face max-name-width))
+                 ;; Apply attention background to name box for waiting state
+                 (name-box-styled
+                  (if (string= status "waiting")
+                      ;; Add red background tint for waiting status
+                      (propertize name-box 'face '(:background "#3a1515"))
+                    name-box))
+                 ;; Add selection indicator ">" for current buffer
+                 (selection-indicator (if (eq buf selected) ">" " "))
+                 (line (concat selection-indicator " " logo-box name-box-styled tile-indicator)))
+            ;; Track selected line for cursor positioning
             (when (eq buf selected)
-              (setq line (propertize line 'face 'agent-shell-workspace-selected))
               (setq target-line line-num))
-            ;; Add text properties for interaction
+            ;; Add text properties for interaction (no mouse-face to preserve box styling)
             (setq line (propertize line
-                                   'agent-shell-workspace-buffer buf
-                                   'mouse-face 'highlight))
+                                   'agent-shell-workspace-buffer buf))
             (insert line "\n")
             (setq line-num (1+ line-num))))))
     ;; Restore cursor to selected line
