@@ -633,7 +633,8 @@ Only changes the post-@ portion, preserving the agent type prefix."
       (when (string-empty-p new-short)
         (user-error "Name cannot be empty"))
       (with-current-buffer buffer
-        (rename-buffer (concat prefix new-short) t))
+        (rename-buffer (concat prefix new-short) t)
+        (setq shell-maker--buffer-name-override (buffer-name)))
       (agent-shell-workspace-sidebar-refresh))))
 
 (defun agent-shell-workspace-sidebar-interrupt ()
