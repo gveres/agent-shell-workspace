@@ -135,7 +135,11 @@ Possible values: \"ready\", \"working\", \"waiting\",
                (map-elt state :tool-calls)
                (> (length (map-elt state :tool-calls)) 0))
           (if (seq-find (lambda (tc)
-                          (map-elt (cdr tc) :permission-request-id))
+                          (let ((data (cdr tc)))
+                            (and (map-elt data :permission-request-id)
+                                 (let ((status (map-elt data :status)))
+                                   (or (null status)
+                                       (equal status "pending"))))))
                         (map-elt state :tool-calls))
               "waiting"
             "working"))
